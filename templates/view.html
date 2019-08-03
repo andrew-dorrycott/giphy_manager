@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Inventory Search</title>
+    <script src="{{url_for("static", filename="view.js")}}"></script>
+  </head>
+  <body onload="buildUX()">
+    <table align="center">
+      <tr>
+        <th align="center">Search</th>
+      </tr>
+      <tr>
+        <td align="center">
+          <input type="text" id="search"/>
+          <button type="button" id="submit" onclick="executeSearch()">Submit</button>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div id="result_count"></div>
+          <div id="result_data"></div>
+        </td>
+      </tr>
+    </table>
+  </body> 
+</html>

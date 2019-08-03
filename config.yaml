@@ -1,0 +1,34 @@
+app:
+    name: giphy_manager
+    host: 0.0.0.0
+    port: 8080
+    debug: False
+    profile: False
+
+postgresql:
+    username: giphy_manager
+    password: giphy_manager
+    database: giphy_manager
+    host: 127.0.0.1
+    port: 5432
+    sqlalchemy_uri: postgresql://{username}:{password}@{host}:{port}/{database}
+
+giphy:
+    search_endpoint: https://api.giphy.com/v1/gifs/search
+    api_key_location: api_key.txt
+
+logging:
+    version: 1
+    disable_existing_loggers: false
+    formatters:
+        standard:
+            format: "%(asctime)s [%(levelname)s] (%(threadName)s) %(name)s: %(message)s"
+    handlers:
+        default:
+            level: DEBUG
+            class: logging.StreamHandler
+            formatter: standard
+    root:
+        level: DEBUG
+        handlers:
+            - default
