@@ -5,7 +5,6 @@
 # Requirements
 * Python 3.6+
 * postgresql
-* ReactJS
 
 
 # Coding Standards
@@ -70,3 +69,4 @@ python3 -m flask run
 
 # Possibilities
 * Use nginx to handle Auth and Static File severing for requests
+* Use ReactJS for cleaner UI and modern Javascript design
