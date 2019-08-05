@@ -16,6 +16,7 @@ postgresql:
 
 giphy:
     search_endpoint: https://api.giphy.com/v1/gifs/search
+    get_endpoint: https://api.giphy.com/v1/gifs
     api_key_location: api_key.txt
 
 logging:
