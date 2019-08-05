@@ -10,6 +10,8 @@ import flask
 
 # Application imports
 from clients import giphy
+from models import bookmarks
+from models import categories
 from models import database
 from models import users
 import config
@@ -113,7 +115,7 @@ def do_search(query):
     REST-like endpoint to search GIPHY and get back a portion of the response
     in json
 
-    :returns: Rendered template
+    :returns: Customized output from GIPHY
     :rtype: json
     """
     # Provided page to search Giphy, load results of each search
@@ -121,32 +123,224 @@ def do_search(query):
     # Allow user to categorize image after saving/favoriting
     output = {"count": 0, "data": [], "error": "", "pagination": {}}
 
-    results = giphy.Client().search(query)
-    output["pagination"] = results["pagination"]
+    try:
+        # Not using get's default in case requester sends blank string
+        limit = int(flask.request.args.get("limit") or 25)
+        offset = int(flask.request.args.get("offset") or 0)
 
-    for item in results.get("data", []):
-        # We only want specific information back from GIPHY
-        output["data"].append(
-            {
-                "type": item.get("type", "Error Data Lost"),
-                "id": item.get("id", "Error Data Lost"),
-                "url": item.get("url", "Error Data Lost"),
-                "title": item.get("title", "Error Data Lost"),
-                "images": item.get("images", {})
-            }
+        results = giphy.Client().search(
+            query=query, limit=limit, offset=offset
+        )
+        output["pagination"] = results["pagination"]
+
+        user = (
+            database.session.query(users.User)
+            .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+            .one()
         )
 
-    if not output["data"]:
-        output["error"] = "No results for {}".format(flask.escape(query))
+        # Grab existing bookmarks to render on the search page
+        gifids = [item.get("id") for item in results.get("data", [])]
+        found_bookmarks = (
+            database.session.query(bookmarks.Bookmark)
+            .filter(bookmarks.Bookmark.giphy_id.in_(gifids))
+            .filter(bookmarks.Bookmark.user == user)
+            .all()
+        )
+        user_bookmarks = {
+            bookmark.giphy_id: {
+                "favorite": bookmark.favorite,
+                "categories": [
+                    category.to_dict() for category in bookmark[0].categories
+                ],
+            }
+            for bookmark in found_bookmarks
+        }
 
-    output["count"] = len(output["data"])
+        for item in results.get("data", []):
+            # We only want specific information back from GIPHY
+            output["data"].append(
+                {
+                    "type": item.get("type", "Error Data Lost"),
+                    "id": item.get("id", "Error Data Lost"),
+                    "url": item.get("url", "Error Data Lost"),
+                    "title": item.get("title", "Error Data Lost"),
+                    "images": item.get("images", {}),
+                    "favorite": user_bookmarks.get(item.get("id"), {}).get(
+                        "favorite", False
+                    ),
+                    "saved": item.get("id") in user_bookmarks,
+                    "categories": user_bookmarks.get(item.get("id"), {}).get(
+                        "categories", []
+                    ),
+                }
+            )
+
+        if not output["data"]:
+            output["error"] = "No results for {}".format(flask.escape(query))
+
+        output["count"] = len(output["data"])
+    except ValueError:
+        message = "Invalid parameters: limit={} and/or offset={}".format(
+            flask.escape(flask.request.args.get("limit")),
+            flask.escape(flask.request.args.get("offset")),
+        )
+        output["error"] = message
+    except Exception as error:
+        LOGGER.exception(error)
+        output["error"] = "Unexpected error occurred"
 
     return json.dumps(output)
 
 
+@base.route("/get_gif_by_id/<gifid>")
+@is_authenticated()
+def get_gif_by_id(gifid):
+    """
+    REST-like endpoint to get a gif by id from GIPHY
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    output = {"data": [], "error": ""}
+
+    try:
+        results = giphy.Client().get(gifid=gifid)
+
+        item = results.get("data", {})
+        # We only want specific information back from GIPHY
+        output["data"] = {
+            "type": item.get("type", "Error Data Lost"),
+            "id": item.get("id", "Error Data Lost"),
+            "url": item.get("url", "Error Data Lost"),
+            "title": item.get("title", "Error Data Lost"),
+            "images": item.get("images", {}),
+            "favorite": False,
+            "saved": False,
+            "categories": [],
+        }
+
+        user = (
+            database.session.query(users.User)
+            .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+            .one()
+        )
+
+        bookmark = (
+            database.session.query(bookmarks.Bookmark)
+            .filter(bookmarks.Bookmark.giphy_id == gifid)
+            .filter(bookmarks.Bookmark.user == user)
+            .all()
+        )
+
+        if bookmark:
+            output["data"]["saved"] = True
+            output["data"]["favorite"] = bookmark[0].favorite
+            output["data"]["categories"] = [
+                category.to_dict() for category in bookmark[0].categories
+            ]
+
+        if not output["data"]:
+            output["error"] = "No results for {}".format(flask.escape(gifid))
+
+    except Exception as error:
+        LOGGER.exception(error)
+        output["error"] = "Unexpected error occurred"
+
+    return json.dumps(output)
+
+
+@base.route("/save_gif_by_id/<gifid>")
+@is_authenticated()
+def save_gif_by_id(gifid):
+    """
+    REST-like endpoint to save gifs to the user's potato space
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    already_bookmarked = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .all()
+    )
+
+    if already_bookmarked:
+        return  # Already bookmarked
+    else:
+        database.session.add(bookmarks.Bookmark(user=user, giphy_id=gifid))
+        database.session.commit()
+
+
+@base.route("/favorite_gif_by_id/<gifid>")
+@is_authenticated()
+def favorite_gif_by_id(gifid):
+    """
+    REST-like endpoint to save gifs to the user's potato space
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    already_bookmarked = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .all()
+    )
+
+    if already_bookmarked:
+        already_bookmarked[0].favorite = True
+    else:
+        database.session.add(
+            bookmarks.Bookmark(user=user, giphy_id=gifid, favorite=True)
+        )
+
+    database.session.commit()
+
+
+@base.route("/remove_gif_by_id/<gifid>")
+@is_authenticated()
+def remove_gif_by_id(gifid):
+    """
+    REST-like endpoint to remove gifs from the user's potato space
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    bookmark = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .all()
+    )
+
+    if bookmark:
+        bookmark[0].delete()
+        database.session.commit()
+
+
 @base.route("/categories")
 @is_authenticated()
-def categories():
+def get_categories():
     """
     Page users can use to categories from
 
