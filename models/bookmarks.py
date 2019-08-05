@@ -1,18 +1,18 @@
 # Third party imports
 import sqlalchemy
-from sqlalchemy.ext.declarative import declarative_base
+
+# Application imports
+from models import database
 
 
-Base = declarative_base()
-
-
-class Bookmark(Base):
+class Bookmark(database.Base):
     __tablename__ = "bookmarks"
 
     # Composite key
     user_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), primary_key=True
     )
+    user = sqlalchemy.orm.relationship("User", back_populates="bookmarks")
     giphy_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
     favorite = sqlalchemy.Column(sqlalchemy.Boolean)
 

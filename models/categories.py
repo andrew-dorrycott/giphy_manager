@@ -1,12 +1,11 @@
 # Third party imports
 import sqlalchemy
-from sqlalchemy.ext.declarative import declarative_base
+
+# Application imports
+from models import database
 
 
-Base = declarative_base()
-
-
-class Category(Base):
+class Category(database.Base):
     __tablename__ = "categories"
 
     # Composite key
@@ -14,6 +13,7 @@ class Category(Base):
     user_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), primary_key=True
     )
+    user = sqlalchemy.orm.relationship("User", back_populates="categories")
 
     def __init__(self, **kwargs):
         """

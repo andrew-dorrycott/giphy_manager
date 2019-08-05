@@ -1,12 +1,11 @@
 # Third party imports
 import sqlalchemy
-from sqlalchemy.ext.declarative import declarative_base
+
+# Application imports
+from models import database
 
 
-Base = declarative_base()
-
-
-class User(Base):
+class User(database.Base):
     __tablename__ = "users"
 
     id = sqlalchemy.Column(
@@ -17,6 +16,17 @@ class User(Base):
     )
     # Needs to be encrypted
     password = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    # For simplicity sake, the users token will be saved to their user record
+    # In Enterprise software, this belongs in memcached, Redis, or some other
+    # Cache system
+    token = sqlalchemy.Column(sqlalchemy.String)
+
+    # Relationships
+    categories = sqlalchemy.orm.relationship(
+        "Category", back_populates="user"
+    )
+    bookmarks = sqlalchemy.orm.relationship("Bookmark", back_populates="user")
 
     def __init__(self, **kwargs):
         """
