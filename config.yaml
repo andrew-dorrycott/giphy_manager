@@ -4,6 +4,7 @@ app:
     port: 8080
     debug: False
     profile: False
+    secure: False
 
 postgresql:
     username: giphy_manager
