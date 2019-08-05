@@ -1,16 +1,18 @@
 # Standard imports
-import logging
 import functools
-import uuid
+import json
+import logging
 import time
+import uuid
 
 # Third party imports
 import flask
 
 # Application imports
-import config
+from clients import giphy
 from models import database
 from models import users
+import config
 
 
 LOGGER = logging.getLogger(__name__)
@@ -101,10 +103,45 @@ def search():
     :returns: Rendered template
     :rtype: str
     """
+    return flask.render_template("search.html")
+
+
+@base.route("/do_search/<query>")
+@is_authenticated()
+def do_search(query):
+    """
+    REST-like endpoint to search GIPHY and get back a portion of the response
+    in json
+
+    :returns: Rendered template
+    :rtype: json
+    """
     # Provided page to search Giphy, load results of each search
     # Allow user to save/favorite images
     # Allow user to categorize image after saving/favoriting
-    return flask.render_template("search.html")
+    output = {"count": 0, "data": [], "error": "", "pagination": {}}
+
+    results = giphy.Client().search(query)
+    output["pagination"] = results["pagination"]
+
+    for item in results.get("data", []):
+        # We only want specific information back from GIPHY
+        output["data"].append(
+            {
+                "type": item.get("type", "Error Data Lost"),
+                "id": item.get("id", "Error Data Lost"),
+                "url": item.get("url", "Error Data Lost"),
+                "title": item.get("title", "Error Data Lost"),
+                "images": item.get("images", {})
+            }
+        )
+
+    if not output["data"]:
+        output["error"] = "No results for {}".format(flask.escape(query))
+
+    output["count"] = len(output["data"])
+
+    return json.dumps(output)
 
 
 @base.route("/categories")
