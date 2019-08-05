@@ -23,9 +23,7 @@ class User(database.Base):
     token = sqlalchemy.Column(sqlalchemy.String)
 
     # Relationships
-    categories = sqlalchemy.orm.relationship(
-        "Category", back_populates="user"
-    )
+    categories = sqlalchemy.orm.relationship("Category", back_populates="user")
     bookmarks = sqlalchemy.orm.relationship("Bookmark", back_populates="user")
 
     def __init__(self, **kwargs):
@@ -56,4 +54,8 @@ class User(database.Base):
         :returns: Dict representation of the data
         :rtype: dict
         """
-        return {"id": self.id, "username": self.username}
+        return {
+            "id": self.id,
+            "username": self.username,
+            "categories": self.categories,
+        }
