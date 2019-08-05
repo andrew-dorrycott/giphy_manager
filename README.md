@@ -1,5 +1,5 @@
 # Purpose
-* A lightweight Giphy application to allow users to save, favorite, and categorize gifs
+* A lightweight Giphy application to allow users to save, favorite, and categorize gifs after registering with and logging into the application
 
 
 # Requirements
@@ -8,7 +8,7 @@
 * ReactJS
 
 
-# Standards
+# Coding Standards
 * Black
 ```
 {
@@ -48,10 +48,6 @@ CREATE USER giphy_manager;
 GRANT ALL PRIVILEGES ON DATABASE giphy_manager TO giphy_manager;
 \password giphy_manager
 ```
-* Execute SQL
-```
-< Convert this to SQLAlchemy DB creation instead of handwritten SQL >
-```
 * Configure Flask
 ```
 export FLASK_ENV=dev
@@ -63,7 +59,13 @@ python3 -m flask run
 ```
 
 # Usage
-* From any browser, go to http://127.0.0.1:5000/
+* From any browser, go to http://127.0.0.1:5000/register to create the first user
+* Enter a username, password, and confirmation password
+* Or go to http://127.0.0.1:5000/login to log into an existing user
+* Once logged in, you should be redirected to http://127.0.0.1:5000/search
+* Search for any gifs through this UI, save/favorite any gifs you find interesting
+* Go to http://127.0.0.1:5000/view to view your saved/favorited gifs, add categories to any of the gifs you would like
+* Go to http://127.0.0.1:5000/categories to add/change/remove categories you would like to use in the future
 
 
 # Possibilities
