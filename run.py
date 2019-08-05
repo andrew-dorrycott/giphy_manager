@@ -29,8 +29,6 @@ def create_app():
     LOGGER.debug("Logging config loaded")
 
     # Load configs
-    with open(config.giphy["api_key_location"]) as _file:
-        config.giphy["api_key"] = _file.read()
     app.config.from_object(config)
 
     # Load database
