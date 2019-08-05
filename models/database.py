@@ -3,24 +3,8 @@ import sqlalchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-
-##
-# For those watching, thank you for hanging out while I pound through this <3's
-# There skipped that song, fuck it anyways
-##
-
-
-# Copied for now
-def load_config():
-    """
-    Loads the config from config.yaml
-
-    :returns: Dict of loaded config.yaml
-    :rtype: dict
-    """
-    import yaml
-    with open("config.yaml", "r") as _file:
-        return yaml.load(_file, Loader=yaml.FullLoader)
+# Application imports
+import config
 
 
 def load_db(config):
@@ -40,9 +24,14 @@ def load_db(config):
 
 
 def init_db():
-    # import all modules here that might define models so that
-    # they will be registered properly on the metadata.  Otherwise
-    # you will have to import them first before calling init_db()
+    """
+    Creates the tables in the database if they don't exist.
+    Currently requires each model to be imported to ensure they're loaded
+    before the tables are created
+
+    :returns: Nothing
+    :rtype: None
+    """
 
     # Prevent circular imports
     from models import categories  # noqa: F401
@@ -52,9 +41,8 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-config = load_config()
 engine = sqlalchemy.create_engine(
-    config["postgresql"]["sqlalchemy_uri"].format(**config["postgresql"])
+    config.postgresql["sqlalchemy_uri"].format(**config.postgresql)
 )
 session = scoped_session(
     sessionmaker(autocommit=False, autoflush=False, bind=engine)
