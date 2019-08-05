@@ -13,7 +13,6 @@ def load_config():
         return yaml.load(_file, Loader=yaml.FullLoader)
 
 
-# Magic, this is going to look kinda bad
-# This right here is extremely bad practice :D
+# Push loaded config.yaml into globals for quick access to the rest of the app
 config_globals = globals()
 config_globals.update(load_config())
