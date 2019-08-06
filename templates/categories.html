@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Categories</title>
+    <script src="{{url_for("static", filename="categories.js")}}"></script>
+  </head>
+  <body onload="buildUX()">
+    <table align="center">
+      <tr>
+        <th align="center">Categories</th>
+      </tr>
+      <tr>
+        <td align="center">
+          <input type="text" id="new_category"/>
+          <button type="button" id="submit" onclick="addCategory()">Add</button>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div id="result_data">
+            <table id="categories_table">
+              {% for category in categories %}
+                <tr id="cat_{{ category.id }}">
+                  <td align="left">
+                    <button type="button" onclick="deleteCategory('{{ category.id }}')">Remove</button>
+                    &nbsp;&nbsp;&nbsp; {{ category.name }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </table>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body> 
+</html>
