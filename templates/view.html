@@ -1,24 +1,66 @@
 <!doctype html>
 <html>
   <head>
-    <title>Inventory Search</title>
+    <title>Personal Gifs</title>
     <script src="{{url_for("static", filename="view.js")}}"></script>
   </head>
   <body onload="buildUX()">
     <table align="center">
       <tr>
-        <th align="center">Search</th>
-      </tr>
-      <tr>
-        <td align="center">
-          <input type="text" id="search"/>
-          <button type="button" id="submit" onclick="executeSearch()">Submit</button>
-        </td>
+        <th align="center">Saved/Favorited Gifs</th>
       </tr>
       <tr>
         <td>
-          <div id="result_count"></div>
-          <div id="result_data"></div>
+          <div id="result_count">
+            Results: {{ number_of_items }}
+          </div>
+          <div id="result_data">
+            <table>
+              {% for x, bookmark in enumerated %}
+                {% set giphy_id = bookmark["id"] %}
+                {% if x % 5 == 0 and x != 0 %}
+                  <tr>
+                {% endif %}
+                <td align="center">
+                  <img src="{{ bookmark['images']['preview_gif']['url'] }}"/>
+                  <br>
+                  Title: {{ bookmark["title"] }}
+                  <br>
+                  <input type="hidden" id="saved_{{ giphy_id }}" value="true">
+                  <input type="hidden" id="favorited_{{ giphy_id }}" value="{{ bookmark['favorite'] }}">
+                  <button type="button" id="bookmark_{{ giphy_id }}" onclick="toggleBookmark('{{ giphy_id }}')">Remove</button>
+                  &nbsp;&nbsp;&nbsp;
+                  {% if bookmark["favorite"] %}
+                    <button type="button" id="bookmark_{{ giphy_id  }}" onclick="toggleBookmark('{{ giphy_id }}')">Unfavorite</button>
+                  {% else %}
+                    <button type="button" id="bookmark_{{ giphy_id  }}" onclick="toggleBookmark('{{ giphy_id }}')">Favorite</button>
+                  {% endif %}
+                  <br>
+                  <br>
+                  <div id="categories_{{ giphy_id }}">
+                    {% for category in bookmark["categories"] %}
+                      <div id="cat_{{ giphy_id }}_{{ category['id'] }}" align="left">
+                          <button type="button" onclick="removeCategory('{{ giphy_id }}', {{ category['id'] }})">Remove</button>
+                          &nbsp;&nbsp;&nbsp; {{ category["name"] }}
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <br>
+                  <div id="categories_{{ giphy_id }}">
+                    <select id="categories_for_{{ bookmark['id'] }}">
+                    {% for category in user.categories %}
+                      <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                    </select>
+                    <button type="button" onclick="addCategory('{{ bookmark['id'] }}')">Add</button>
+                  </div>
+                </td>
+                {% if x % 5 == 0 and x != 0 %}
+                  </tr>
+                {% endif %}
+              {% endfor %}
+            </table>
+          </div>
         </td>
       </tr>
     </table>
