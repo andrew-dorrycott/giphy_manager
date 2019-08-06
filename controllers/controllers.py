@@ -24,6 +24,12 @@ base = flask.Blueprint("base", __name__, template_folder="templates")
 
 
 def generate_token():
+    """
+    Generates a unique enough token for users to use as already authenticated
+
+    :returns: Hex token
+    :rtype: str
+    """
     return uuid.uuid5(namespace=uuid.NAMESPACE_OID, name=time.time().hex()).hex
 
 
@@ -602,8 +608,6 @@ def login():
     :returns: Rendered template
     :rtype: str
     """
-    LOGGER.debug(flask.request.form)
-    LOGGER.debug(flask.g.get("tokens"))
     if flask.request.form:
         next_page = flask.request.headers.get("forward", "/search")
         username = flask.request.form.get("username")
@@ -660,7 +664,7 @@ def register():
 
         if found_user:
             # Send this to the template
-            error = "Username already exists"
+            # error = "Username already exists"
             return flask.render_template("register.html")
         elif password1 != password2:
             # error = "Passwords do not match"
