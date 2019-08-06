@@ -366,9 +366,10 @@ def remove_gif_by_id(gifid):
         .one()
     )
 
+    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
     (
-        database.session.query(bookmark_xref_categories.BookmarkXrefCategory)
-        .filter(bookmark_xref_categories.BookmarkXrefCategory.bookmark_id == bookmark.id)
+        database.session.query(BookmarkXrefCategory)
+        .filter(BookmarkXrefCategory.bookmark_id == bookmark.id)
         .delete()
     )
     database.session.delete(bookmark)
