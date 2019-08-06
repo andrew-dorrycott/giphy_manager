@@ -8,13 +8,18 @@ from models import database
 class Bookmark(database.Base):
     __tablename__ = "bookmarks"
 
-    # Composite key
+    # Due to the complexities of Composite Foreign keys in SQLAlchemy a
+    # traditional single id primary_key column will be used
+    id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     user_id = sqlalchemy.Column(
-        sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), primary_key=True
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id")
     )
+    giphy_id = sqlalchemy.Column(sqlalchemy.String)
     user = sqlalchemy.orm.relationship("User", back_populates="bookmarks")
-    giphy_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
-    favorite = sqlalchemy.Column(sqlalchemy.Boolean)
+    favorite = sqlalchemy.Column(sqlalchemy.Boolean, default=False)
+    categories = sqlalchemy.orm.relationship(
+        "Category", secondary="bookmark_xref_categories"
+    )
 
     def __init__(self, **kwargs):
         """
@@ -33,9 +38,11 @@ class Bookmark(database.Base):
         :returns: String representation of the data
         :rtype: str
         """
-        return "<BookMark(id='{id}', description='{description}')>".format(
-            **self.__dict__
+        message = (
+            "<BookMark(id='{user_id}', giphy_id='{giphy_id}', "
+            + "favorite='{favorite}')>"
         )
+        return message.format(**self.__dict__)
 
     def to_dict(self):
         """
@@ -47,5 +54,5 @@ class Bookmark(database.Base):
         return {
             "user_id": self.user_id,
             "giphy_id": self.giphy_id,
-            "favorite": self.favorite
+            "favorite": self.favorite,
         }

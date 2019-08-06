@@ -8,10 +8,12 @@ from models import database
 class Category(database.Base):
     __tablename__ = "categories"
 
-    # Composite key
-    name = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
+    # Due to the complexities of Composite Foreign keys in SQLAlchemy a
+    # traditional single id primary_key column will be used
+    id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
+    name = sqlalchemy.Column(sqlalchemy.String)
     user_id = sqlalchemy.Column(
-        sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), primary_key=True
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id")
     )
     user = sqlalchemy.orm.relationship("User", back_populates="categories")
 

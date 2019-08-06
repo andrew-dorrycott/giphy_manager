@@ -37,6 +37,7 @@ def init_db():
     from models import categories  # noqa: F401
     from models import bookmarks  # noqa: F401
     from models import users  # noqa: F401
+    from models import bookmark_xref_categories  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 
