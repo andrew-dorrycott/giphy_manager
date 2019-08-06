@@ -1,8 +1,12 @@
 # Third party imports
+from cryptography.fernet import Fernet
+from sqlalchemy.ext.hybrid import Comparator
+from sqlalchemy.ext.hybrid import hybrid_property
 import sqlalchemy
 
 # Application imports
 from models import database
+import config
 
 
 class User(database.Base):
@@ -15,7 +19,7 @@ class User(database.Base):
         sqlalchemy.String, unique=True, nullable=False
     )
     # Needs to be encrypted
-    password = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    enc_password = sqlalchemy.Column(sqlalchemy.LargeBinary, nullable=False)
 
     # For simplicity sake, the users token will be saved to their user record
     # In Enterprise software, this belongs in memcached, Redis, or some other
@@ -46,6 +50,29 @@ class User(database.Base):
         return "<User(id='{id}', username='{username}')>".format(
             **self.__dict__
         )
+
+    @hybrid_property
+    def password(self):
+        cipher = Fernet(config.postgresql["salt"])
+        return cipher.decrypt(self.enc_password)
+
+    # Not working as intended right now
+    # class encrypt_comparator(Comparator):
+    #     def __init__(self, enc_password):
+    #         self.enc_password = enc_password
+
+    #     def __eq__(self, other):
+    #         cipher = Fernet(config.postgresql["salt"])
+    #         return self.enc_password == cipher.encrypt(str.encode(other))
+
+    # @password.comparator
+    # def password(cls):
+    #     return User.encrypt_comparator(cls.enc_password)
+
+    @password.setter
+    def password(self, value):
+        cipher = Fernet(config.postgresql["salt"])
+        self.enc_password = cipher.encrypt(str.encode(value))
 
     def to_dict(self):
         """

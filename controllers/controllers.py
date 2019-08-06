@@ -616,12 +616,19 @@ def login():
         found_user = (
             database.session.query(users.User)
             .filter(users.User.username == username)
-            .filter(users.User.password == password)
             .all()
         )
+        LOGGER.debug(found_user)
 
         if found_user:
             user = found_user[0]
+            LOGGER.debug(user.password)
+
+            # Hack because cryptography.fernet isn't jiving well right now
+            if user.password != str.encode(password):
+                # Invalid login
+                return flask.render_template("login.html")
+
             new_token = generate_token()
             user.token = new_token
             database.session.commit()

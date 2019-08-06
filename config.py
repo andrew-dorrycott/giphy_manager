@@ -15,6 +15,9 @@ def load_config():
     with open(config["giphy"]["api_key_location"]) as _file:
         config["giphy"]["api_key"] = _file.read()
 
+    with open(config["postgresql"]["salt_location"]) as _file:
+        config["postgresql"]["salt"] = _file.read()
+
     return config
 
 

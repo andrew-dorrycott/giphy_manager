@@ -10,6 +10,7 @@ postgresql:
     username: giphy_manager
     password: giphy_manager
     database: giphy_manager
+    salt_location: salt.txt
     host: 127.0.0.1
     port: 5432
     sqlalchemy_uri: postgresql://{username}:{password}@{host}:{port}/{database}

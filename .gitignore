@@ -1,5 +1,6 @@
 # Application files
 api_key.txt
+salt.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
