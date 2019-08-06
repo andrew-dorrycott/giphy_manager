@@ -11,7 +11,7 @@ import flask
 # Application imports
 from clients import giphy
 from models import bookmarks
-from models import categories
+from models import bookmark_xref_categories
 from models import database
 from models import users
 import config
@@ -147,11 +147,12 @@ def do_search(query):
             .filter(bookmarks.Bookmark.user == user)
             .all()
         )
+
         user_bookmarks = {
             bookmark.giphy_id: {
-                "favorite": bookmark.favorite,
+                "favorited": bookmark.favorite,
                 "categories": [
-                    category.to_dict() for category in bookmark[0].categories
+                    category.to_dict() for category in bookmark.categories
                 ],
             }
             for bookmark in found_bookmarks
@@ -166,8 +167,8 @@ def do_search(query):
                     "url": item.get("url", "Error Data Lost"),
                     "title": item.get("title", "Error Data Lost"),
                     "images": item.get("images", {}),
-                    "favorite": user_bookmarks.get(item.get("id"), {}).get(
-                        "favorite", False
+                    "favorited": user_bookmarks.get(item.get("id"), {}).get(
+                        "favorited", False
                     ),
                     "saved": item.get("id") in user_bookmarks,
                     "categories": user_bookmarks.get(item.get("id"), {}).get(
@@ -273,17 +274,19 @@ def save_gif_by_id(gifid):
     )
 
     if already_bookmarked:
-        return  # Already bookmarked
+        return flask.make_response("")  # Already bookmarked
     else:
         database.session.add(bookmarks.Bookmark(user=user, giphy_id=gifid))
         database.session.commit()
+
+    return flask.make_response("")
 
 
 @base.route("/favorite_gif_by_id/<gifid>")
 @is_authenticated()
 def favorite_gif_by_id(gifid):
     """
-    REST-like endpoint to save gifs to the user's potato space
+    REST-like endpoint to favorite gifs
 
     :returns: Customized output from GIPHY
     :rtype: json
@@ -310,6 +313,37 @@ def favorite_gif_by_id(gifid):
 
     database.session.commit()
 
+    return flask.make_response("")
+
+
+@base.route("/unfavorite_gif_by_id/<gifid>")
+@is_authenticated()
+def unfavorite_gif_by_id(gifid):
+    """
+    REST-like endpoint to unfavorite gifs
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    already_bookmarked = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .all()
+    )
+
+    if already_bookmarked:
+        already_bookmarked[0].favorite = False
+        database.session.commit()
+
+    return flask.make_response("")
+
 
 @base.route("/remove_gif_by_id/<gifid>")
 @is_authenticated()
@@ -325,22 +359,115 @@ def remove_gif_by_id(gifid):
         .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
         .one()
     )
+    bookmark = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .one()
+    )
+
+    (
+        database.session.query(bookmark_xref_categories.BookmarkXrefCategory)
+        .filter(bookmark_xref_categories.BookmarkXrefCategory.bookmark_id == bookmark.id)
+        .delete()
+    )
+    database.session.delete(bookmark)
+    database.session.commit()
+
+    return flask.make_response("")
+
+
+@base.route("/get_categories")
+@is_authenticated()
+def get_categories():
+    """
+    REST-like endpoint to remove gifs from the user's potato space
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    results = [category.to_dict() for category in user.categories]
+
+    return json.dumps(results)
+
+
+@base.route("/add_categories/<gifid>/<category_id>")
+@is_authenticated()
+def add_categories(gifid, category_id):
+    """
+    REST-like endpoint to add a category to a bookmarked gif
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
 
     bookmark = (
         database.session.query(bookmarks.Bookmark)
         .filter(bookmarks.Bookmark.giphy_id == gifid)
         .filter(bookmarks.Bookmark.user == user)
-        .all()
+        .one()
     )
 
-    if bookmark:
-        bookmark[0].delete()
-        database.session.commit()
+    database.session.add(
+        bookmark_xref_categories.BookmarkXrefCategory(
+            bookmark_id=bookmark.id, category_id=category_id
+        )
+    )
+
+    database.session.commit()
+
+    return flask.make_response("")
+
+
+@base.route("/remove_categories/<gifid>/<category_id>")
+@is_authenticated()
+def remove_categories(gifid, category_id):
+    """
+    REST-like endpoint to remove a category from a bookmarked gif
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    bookmark = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.giphy_id == gifid)
+        .filter(bookmarks.Bookmark.user == user)
+        .one()
+    )
+
+    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
+    (
+        database.session.query(BookmarkXrefCategory)
+        .filter(BookmarkXrefCategory.bookmark_id == bookmark.id)
+        .filter(BookmarkXrefCategory.category == category_id)
+        .delete()
+    )
+
+    database.session.commit()
+
+    return flask.make_response("")
 
 
 @base.route("/categories")
 @is_authenticated()
-def get_categories():
+def view_categories():
     """
     Page users can use to categories from
 
