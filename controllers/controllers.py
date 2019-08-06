@@ -7,11 +7,13 @@ import uuid
 
 # Third party imports
 import flask
+import sqlalchemy
 
 # Application imports
 from clients import giphy
-from models import bookmarks
 from models import bookmark_xref_categories
+from models import bookmarks
+from models import categories
 from models import database
 from models import users
 import config
@@ -98,13 +100,38 @@ def view():
         .one()
     )
 
-    already_bookmarked = (
+    all_bookmarks = (
         database.session.query(bookmarks.Bookmark)
         .filter(bookmarks.Bookmark.user == user)
         .all()
     )
+    output = []
+    for bookmark in all_bookmarks:
+        giphy_results = giphy.Client().get(bookmark.giphy_id).get("data", {})
+        output.append(
+            {
+                "type": giphy_results.get("type", "Error Data Lost"),
+                "id": giphy_results.get("id", "Error Data Lost"),
+                "url": giphy_results.get("url", "Error Data Lost"),
+                "title": giphy_results.get("title", "Error Data Lost"),
+                "images": giphy_results.get("images", {}),
+                "favorited": bookmark.favorite,
+                "saved": True,
+                "categories": [
+                    category.to_dict() for category in bookmark.categories
+                ],
+            }
+        )
+    # Get items from GIPHY after grabbing the bookmarked items
+    number_of_items = len(output)
+    enumerated = enumerate(output)
 
-    return flask.render_template("view.html")
+    return flask.render_template(
+        "view.html",
+        number_of_items=number_of_items,
+        enumerated=enumerated,
+        user=user,
+    )
 
 
 @base.route("/search")
@@ -411,7 +438,7 @@ def get_categories():
 
 @base.route("/add_categories/<gifid>/<category_id>")
 @is_authenticated()
-def add_categories(gifid, category_id):
+def add_categories_to(gifid, category_id):
     """
     REST-like endpoint to add a category to a bookmarked gif
 
@@ -431,20 +458,24 @@ def add_categories(gifid, category_id):
         .one()
     )
 
-    database.session.add(
-        bookmark_xref_categories.BookmarkXrefCategory(
-            bookmark_id=bookmark.id, category_id=category_id
+    try:
+        database.session.add(
+            bookmark_xref_categories.BookmarkXrefCategory(
+                bookmark_id=bookmark.id, category_id=category_id
+            )
         )
-    )
 
-    database.session.commit()
+        database.session.commit()
+    except sqlalchemy.exc.IntegrityError:
+        # This should return a non 200 for already being present
+        return flask.make_response("")
 
     return flask.make_response("")
 
 
 @base.route("/remove_categories/<gifid>/<category_id>")
 @is_authenticated()
-def remove_categories(gifid, category_id):
+def remove_categories_to(gifid, category_id):
     """
     REST-like endpoint to remove a category from a bookmarked gif
 
@@ -468,7 +499,7 @@ def remove_categories(gifid, category_id):
     (
         database.session.query(BookmarkXrefCategory)
         .filter(BookmarkXrefCategory.bookmark_id == bookmark.id)
-        .filter(BookmarkXrefCategory.category == category_id)
+        .filter(BookmarkXrefCategory.category_id == category_id)
         .delete()
     )
 
@@ -486,8 +517,81 @@ def view_categories():
     :returns: Rendered template
     :rtype: str
     """
-    # Allow user to add/change/remove categories
-    return flask.render_template("categories.html")
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    categories = user.categories
+    return flask.render_template("categories.html", categories=categories)
+
+
+@base.route("/add_category/<category_name>")
+@is_authenticated()
+def add_category(category_name):
+    """
+    REST-like endpoint to add a category
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    existing_category = (
+        database.session.query(categories.Category)
+        .filter(categories.Category.name == category_name)
+        .filter(categories.Category.user == user)
+        .all()
+    )
+
+    if existing_category:
+        # Already exists, move on
+        return json.dumps({})
+
+    new_category = categories.Category(name=category_name, user=user)
+    database.session.add(new_category)
+    database.session.commit()
+
+    return json.dumps(new_category.to_dict())
+
+
+@base.route("/remove_category/<category_id>")
+@is_authenticated()
+def remove_category(category_id):
+    """
+    REST-like endpoint to remove a category
+
+    :returns: Customized output from GIPHY
+    :rtype: json
+    """
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
+    (
+        database.session.query(BookmarkXrefCategory)
+        .filter(BookmarkXrefCategory.category_id == category_id)
+        .delete()
+    )
+
+    (
+        database.session.query(categories.Category)
+        .filter(categories.Category.id == category_id)
+        .filter(categories.Category.user_id == user.id)
+        .delete()
+    )
+
+    database.session.commit()
+
+    return flask.make_response("")
 
 
 @base.route("/login", methods=("GET", "POST"))
@@ -528,7 +632,7 @@ def login():
             return response
         else:
             # Send this to the template
-            error = "Invalid Login Credentials"
+            # error = "Invalid Login Credentials"
             return flask.render_template("login.html")
     else:
         return flask.render_template("login.html")
@@ -559,7 +663,7 @@ def register():
             error = "Username already exists"
             return flask.render_template("register.html")
         elif password1 != password2:
-            error = "Passwords do not match"
+            # error = "Passwords do not match"
             return flask.render_template("register.html")
         else:
             new_token = generate_token()
