@@ -92,7 +92,18 @@ def view():
     :returns: Rendered template
     :rtype: str
     """
-    # Load all saved images (includes favorites)
+    user = (
+        database.session.query(users.User)
+        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        .one()
+    )
+
+    already_bookmarked = (
+        database.session.query(bookmarks.Bookmark)
+        .filter(bookmarks.Bookmark.user == user)
+        .all()
+    )
+
     return flask.render_template("view.html")
 
 
