@@ -1,10 +1,12 @@
 # Standard imports
 import functools
+import hashlib
 
 # Third party imports
 import flask
 
 # Application imports
+import config
 import models
 
 
@@ -52,3 +54,20 @@ def is_authenticated():
         return wrapped
 
     return wrapper
+
+
+def encrypt(value):
+    """
+    Encrypts the input
+
+    :param value: Input to be encrypted
+    :type value: str
+    :returns: Returns the encrypted value
+    :rtype: byte
+    """
+    return hashlib.pbkdf2_hmac(
+        hash_name="sha256",
+        password=value.encode("utf-8"),
+        salt=config.postgresql["salt"].encode("utf-8"),
+        iterations=100000,
+    )

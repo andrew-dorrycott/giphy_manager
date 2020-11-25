@@ -5,8 +5,9 @@ import hashlib
 import sqlalchemy
 
 # Application imports
-import models
 import config
+import models
+import lib
 
 
 class User(models.database.Base):
@@ -69,15 +70,10 @@ class User(models.database.Base):
 
         :param value: New Password
         :type value: str
-        :returns: Returns the encrypted password
-        :rtype: byte
+        :returns: Nothing
+        :rtype: None
         """
-        self.enc_password = hashlib.pbkdf2_hmac(
-            hash_name="sha256",
-            password=value.encode("utf-8"),
-            salt=config.postgresql["salt"].encode("utf-8"),
-            iterations=100000,
-        )
+        self.enc_password = lib.funcs.encrypt(value)
 
     def to_dict(self):
         """
