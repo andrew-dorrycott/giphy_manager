@@ -22,8 +22,8 @@
 
 ## Install Necessary Packages
 ```
-pip3 install requirements.txt
 sudo apt install postgresql
+pip3 install requirements.txt
 ```
 
 ## Register with Giphy
@@ -56,6 +56,10 @@ export FLASK_APP=run.py
 ```
 python3 -m flask run
 ```
+
+## Troubleshooting
+1. If `psycopg2` fails to install due to `libpq-fe.h` error, run the following:
+    `sudo apt install libpq-dev python3-dev`
 
 # Usage
 * From any browser, go to http://127.0.0.1:5000/register to create the first user
