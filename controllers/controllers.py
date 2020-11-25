@@ -614,8 +614,7 @@ def login():
             user = found_user[0]
             LOGGER.debug(user.password)
 
-            # Hack because cryptography.fernet isn't jiving well right now
-            if user.password != str.encode(password):
+            if user.password != lib.funcs.encrypt(password):
                 # Invalid login
                 return flask.render_template("login.html")
 
