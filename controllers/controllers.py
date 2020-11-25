@@ -1,5 +1,4 @@
 # Standard imports
-import functools
 import json
 import logging
 import time
@@ -10,13 +9,10 @@ import flask
 import sqlalchemy
 
 # Application imports
-from clients import giphy
-from models import bookmark_xref_categories
-from models import bookmarks
-from models import categories
-from models import database
-from models import users
+import clients
 import config
+import lib
+import models
 
 
 LOGGER = logging.getLogger(__name__)
@@ -33,54 +29,8 @@ def generate_token():
     return uuid.uuid5(namespace=uuid.NAMESPACE_OID, name=time.time().hex()).hex
 
 
-# This belongs in lib.funcs
-def is_authenticated():
-    """
-    Handles checking if the requestor is authenticated. If not, sends them to
-    the login page
-    """
-
-    def wrapper(function):
-        """The outer wrapper for :func:`is_authenticated`.
-
-        :param function: The function to execute if authenticated.
-        :type function: function
-        :returns: The wrapped function.
-        :rtype: function
-        """
-
-        @functools.wraps(function)
-        def wrapped(*args, **kwargs):
-            """The inner wrapper for :func:`is_authenticated`.
-
-            :param args: Argument list, passed to `function`.
-            :type args: list
-            :param kwargs: Argument keyword dict, passed to `function`.
-            :returns: The called function.
-            :rtype: the return type of `function` from :func:`wrapper`
-            """
-            token = flask.request.cookies.get("X-Auth-Token")
-            found_user = (
-                database.session.query(users.User)
-                .filter(users.User.token == token)
-                .all()
-            )
-            if found_user:
-                # Very simple authentication
-                return function(*args, **kwargs)
-            else:
-                response = flask.make_response(flask.redirect("/login"))
-                response.headers["forward"] = flask.request.url
-                return response
-
-        # Des be important, hehehe (whoops)
-        return wrapped
-
-    return wrapper
-
-
 @base.route("/")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def default():
     """
     Default controller to forward users to the proper location
@@ -92,7 +42,7 @@ def default():
 
 
 @base.route("/view")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def view():
     """
     Page for users to view their saved/favorited gifs
@@ -101,19 +51,23 @@ def view():
     :rtype: str
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     all_bookmarks = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.user == user)
         .all()
     )
     output = []
     for bookmark in all_bookmarks:
-        giphy_results = giphy.Client().get(bookmark.giphy_id).get("data", {})
+        giphy_results = (
+            clients.giphy.Client().get(bookmark.giphy_id).get("data", {})
+        )
         output.append(
             {
                 "type": giphy_results.get("type", "Error Data Lost"),
@@ -141,7 +95,7 @@ def view():
 
 
 @base.route("/search")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def search():
     """
     Page for users to search Giphy
@@ -153,7 +107,7 @@ def search():
 
 
 @base.route("/do_search/<query>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def do_search(query):
     """
     REST-like endpoint to search GIPHY and get back a portion of the response
@@ -172,23 +126,26 @@ def do_search(query):
         limit = int(flask.request.args.get("limit") or 25)
         offset = int(flask.request.args.get("offset") or 0)
 
-        results = giphy.Client().search(
+        results = clients.giphy.Client().search(
             query=query, limit=limit, offset=offset
         )
         output["pagination"] = results["pagination"]
 
         user = (
-            database.session.query(users.User)
-            .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+            models.database.session.query(models.users.User)
+            .filter(
+                models.users.User.token
+                == flask.request.cookies["X-Auth-Token"]
+            )
             .one()
         )
 
         # Grab existing bookmarks to render on the search page
         gifids = [item.get("id") for item in results.get("data", [])]
         found_bookmarks = (
-            database.session.query(bookmarks.Bookmark)
-            .filter(bookmarks.Bookmark.giphy_id.in_(gifids))
-            .filter(bookmarks.Bookmark.user == user)
+            models.database.session.query(models.bookmarks.Bookmark)
+            .filter(models.bookmarks.Bookmark.giphy_id.in_(gifids))
+            .filter(models.bookmarks.Bookmark.user == user)
             .all()
         )
 
@@ -211,13 +168,13 @@ def do_search(query):
                     "url": item.get("url", "Error Data Lost"),
                     "title": item.get("title", "Error Data Lost"),
                     "images": item.get("images", {}),
-                    "favorited": user_bookmarks.get(item.get("id"), {}).get(
-                        "favorited", False
-                    ),
+                    "favorited": models.user_models.bookmarks.get(
+                        item.get("id"), {}
+                    ).get("favorited", False),
                     "saved": item.get("id") in user_bookmarks,
-                    "categories": user_bookmarks.get(item.get("id"), {}).get(
-                        "categories", []
-                    ),
+                    "categories": models.user_models.bookmarks.get(
+                        item.get("id"), {}
+                    ).get("categories", []),
                 }
             )
 
@@ -239,7 +196,7 @@ def do_search(query):
 
 
 @base.route("/get_gif_by_id/<gifid>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def get_gif_by_id(gifid):
     """
     REST-like endpoint to get a gif by id from GIPHY
@@ -250,7 +207,7 @@ def get_gif_by_id(gifid):
     output = {"data": [], "error": ""}
 
     try:
-        results = giphy.Client().get(gifid=gifid)
+        results = clients.giphy.Client().get(gifid=gifid)
 
         item = results.get("data", {})
         # We only want specific information back from GIPHY
@@ -266,15 +223,18 @@ def get_gif_by_id(gifid):
         }
 
         user = (
-            database.session.query(users.User)
-            .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+            models.database.session.query(models.users.User)
+            .filter(
+                models.users.User.token
+                == flask.request.cookies["X-Auth-Token"]
+            )
             .one()
         )
 
         bookmark = (
-            database.session.query(bookmarks.Bookmark)
-            .filter(bookmarks.Bookmark.giphy_id == gifid)
-            .filter(bookmarks.Bookmark.user == user)
+            models.database.session.query(models.bookmarks.Bookmark)
+            .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+            .filter(models.bookmarks.Bookmark.user == user)
             .all()
         )
 
@@ -296,7 +256,7 @@ def get_gif_by_id(gifid):
 
 
 @base.route("/save_gif_by_id/<gifid>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def save_gif_by_id(gifid):
     """
     REST-like endpoint to save gifs to the user's potato space
@@ -305,29 +265,33 @@ def save_gif_by_id(gifid):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     already_bookmarked = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .all()
     )
 
     if already_bookmarked:
         return flask.make_response("")  # Already bookmarked
     else:
-        database.session.add(bookmarks.Bookmark(user=user, giphy_id=gifid))
-        database.session.commit()
+        models.database.session.add(
+            models.bookmarks.Bookmark(user=user, giphy_id=gifid)
+        )
+        models.database.session.commit()
 
     return flask.make_response("")
 
 
 @base.route("/favorite_gif_by_id/<gifid>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def favorite_gif_by_id(gifid):
     """
     REST-like endpoint to favorite gifs
@@ -336,32 +300,34 @@ def favorite_gif_by_id(gifid):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     already_bookmarked = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .all()
     )
 
     if already_bookmarked:
         already_bookmarked[0].favorite = True
     else:
-        database.session.add(
-            bookmarks.Bookmark(user=user, giphy_id=gifid, favorite=True)
+        models.database.session.add(
+            models.bookmarks.Bookmark(user=user, giphy_id=gifid, favorite=True)
         )
 
-    database.session.commit()
+    models.database.session.commit()
 
     return flask.make_response("")
 
 
 @base.route("/unfavorite_gif_by_id/<gifid>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def unfavorite_gif_by_id(gifid):
     """
     REST-like endpoint to unfavorite gifs
@@ -370,27 +336,29 @@ def unfavorite_gif_by_id(gifid):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     already_bookmarked = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .all()
     )
 
     if already_bookmarked:
         already_bookmarked[0].favorite = False
-        database.session.commit()
+        models.database.session.commit()
 
     return flask.make_response("")
 
 
 @base.route("/remove_gif_by_id/<gifid>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def remove_gif_by_id(gifid):
     """
     REST-like endpoint to remove gifs from the user's potato space
@@ -399,31 +367,35 @@ def remove_gif_by_id(gifid):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
     bookmark = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .one()
     )
 
-    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
+    BookmarkXrefCategory = (
+        models.bookmark_xref_models.categories.BookmarkXrefCategory
+    )
     (
-        database.session.query(BookmarkXrefCategory)
+        models.database.session.query(BookmarkXrefCategory)
         .filter(BookmarkXrefCategory.bookmark_id == bookmark.id)
         .delete()
     )
-    database.session.delete(bookmark)
-    database.session.commit()
+    models.database.session.delete(bookmark)
+    models.database.session.commit()
 
     return flask.make_response("")
 
 
 @base.route("/get_categories")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def get_categories():
     """
     REST-like endpoint to remove gifs from the user's potato space
@@ -432,8 +404,10 @@ def get_categories():
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
@@ -443,7 +417,7 @@ def get_categories():
 
 
 @base.route("/add_categories/<gifid>/<category_id>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def add_categories_to(gifid, category_id):
     """
     REST-like endpoint to add a category to a bookmarked gif
@@ -452,26 +426,28 @@ def add_categories_to(gifid, category_id):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     bookmark = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .one()
     )
 
     try:
-        database.session.add(
-            bookmark_xref_categories.BookmarkXrefCategory(
+        models.database.session.add(
+            models.bookmark_xref_models.categories.BookmarkXrefCategory(
                 bookmark_id=bookmark.id, category_id=category_id
             )
         )
 
-        database.session.commit()
+        models.database.session.commit()
     except sqlalchemy.exc.IntegrityError:
         # This should return a non 200 for already being present
         return flask.make_response("")
@@ -480,7 +456,7 @@ def add_categories_to(gifid, category_id):
 
 
 @base.route("/remove_categories/<gifid>/<category_id>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def remove_categories_to(gifid, category_id):
     """
     REST-like endpoint to remove a category from a bookmarked gif
@@ -489,33 +465,37 @@ def remove_categories_to(gifid, category_id):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     bookmark = (
-        database.session.query(bookmarks.Bookmark)
-        .filter(bookmarks.Bookmark.giphy_id == gifid)
-        .filter(bookmarks.Bookmark.user == user)
+        models.database.session.query(models.bookmarks.Bookmark)
+        .filter(models.bookmarks.Bookmark.giphy_id == gifid)
+        .filter(models.bookmarks.Bookmark.user == user)
         .one()
     )
 
-    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
+    BookmarkXrefCategory = (
+        models.bookmark_xref_models.categories.BookmarkXrefCategory
+    )
     (
-        database.session.query(BookmarkXrefCategory)
+        models.database.session.query(BookmarkXrefCategory)
         .filter(BookmarkXrefCategory.bookmark_id == bookmark.id)
         .filter(BookmarkXrefCategory.category_id == category_id)
         .delete()
     )
 
-    database.session.commit()
+    models.database.session.commit()
 
     return flask.make_response("")
 
 
 @base.route("/categories")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def view_categories():
     """
     Page users can use to categories from
@@ -524,17 +504,21 @@ def view_categories():
     :rtype: str
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     categories = user.categories
-    return flask.render_template("categories.html", categories=categories)
+    return flask.render_template(
+        "models.categories.html", categories=categories
+    )
 
 
 @base.route("/add_category/<category_name>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def add_category(category_name):
     """
     REST-like endpoint to add a category
@@ -543,15 +527,17 @@ def add_category(category_name):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
     existing_category = (
-        database.session.query(categories.Category)
-        .filter(categories.Category.name == category_name)
-        .filter(categories.Category.user == user)
+        models.database.session.query(models.categories.Category)
+        .filter(models.categories.Category.name == category_name)
+        .filter(models.categories.Category.user == user)
         .all()
     )
 
@@ -559,15 +545,15 @@ def add_category(category_name):
         # Already exists, move on
         return json.dumps({})
 
-    new_category = categories.Category(name=category_name, user=user)
-    database.session.add(new_category)
-    database.session.commit()
+    new_category = models.categories.Category(name=category_name, user=user)
+    models.database.session.add(new_category)
+    models.database.session.commit()
 
     return json.dumps(new_category.to_dict())
 
 
 @base.route("/remove_category/<category_id>")
-@is_authenticated()
+@lib.funcs.is_authenticated()
 def remove_category(category_id):
     """
     REST-like endpoint to remove a category
@@ -576,26 +562,30 @@ def remove_category(category_id):
     :rtype: json
     """
     user = (
-        database.session.query(users.User)
-        .filter(users.User.token == flask.request.cookies["X-Auth-Token"])
+        models.database.session.query(models.users.User)
+        .filter(
+            models.users.User.token == flask.request.cookies["X-Auth-Token"]
+        )
         .one()
     )
 
-    BookmarkXrefCategory = bookmark_xref_categories.BookmarkXrefCategory
+    BookmarkXrefCategory = (
+        models.bookmark_xref_models.categories.BookmarkXrefCategory
+    )
     (
-        database.session.query(BookmarkXrefCategory)
+        models.database.session.query(BookmarkXrefCategory)
         .filter(BookmarkXrefCategory.category_id == category_id)
         .delete()
     )
 
     (
-        database.session.query(categories.Category)
-        .filter(categories.Category.id == category_id)
-        .filter(categories.Category.user_id == user.id)
+        models.database.session.query(models.categories.Category)
+        .filter(models.categories.Category.id == category_id)
+        .filter(models.categories.Category.user_id == user.id)
         .delete()
     )
 
-    database.session.commit()
+    models.database.session.commit()
 
     return flask.make_response("")
 
@@ -614,8 +604,8 @@ def login():
         password = flask.request.form.get("password")
 
         found_user = (
-            database.session.query(users.User)
-            .filter(users.User.username == username)
+            models.database.session.query(models.users.User)
+            .filter(models.users.User.username == username)
             .all()
         )
         LOGGER.debug(found_user)
@@ -631,7 +621,7 @@ def login():
 
             new_token = generate_token()
             user.token = new_token
-            database.session.commit()
+            models.database.session.commit()
 
             response = flask.make_response(flask.redirect(next_page))
             response.set_cookie(
@@ -664,8 +654,8 @@ def register():
         password2 = flask.request.form.get("password2")
 
         found_user = (
-            database.session.query(users.User)
-            .filter(users.User.username == username)
+            models.database.session.query(models.users.User)
+            .filter(models.users.User.username == username)
             .all()
         )
 
@@ -678,11 +668,11 @@ def register():
             return flask.render_template("register.html")
         else:
             new_token = generate_token()
-            new_user = users.User(
+            new_user = models.users.User(
                 username=username, password=password1, token=new_token
             )
-            database.session.add(new_user)
-            database.session.commit()
+            models.database.session.add(new_user)
+            models.database.session.commit()
 
             response = flask.make_response(flask.redirect(next_page))
             response.set_cookie(

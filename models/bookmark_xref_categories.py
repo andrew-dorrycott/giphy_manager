@@ -2,10 +2,10 @@
 import sqlalchemy
 
 # Application imports
-from models import database
+import models
 
 
-class BookmarkXrefCategory(database.Base):
+class BookmarkXrefCategory(models.database.Base):
     __tablename__ = "bookmark_xref_categories"
 
     # Composite key

@@ -2,10 +2,10 @@
 import sqlalchemy
 
 # Application imports
-from models import database
+import models
 
 
-class Bookmark(database.Base):
+class Bookmark(models.database.Base):
     __tablename__ = "bookmarks"
 
     # Due to the complexities of Composite Foreign keys in SQLAlchemy a

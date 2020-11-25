@@ -28,6 +28,7 @@ class Client(object):
         """
         if not params:
             params = {}
+
         if not headers:
             headers = {}
 

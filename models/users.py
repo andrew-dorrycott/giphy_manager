@@ -5,11 +5,11 @@ import hashlib
 import sqlalchemy
 
 # Application imports
-from models import database
+import models
 import config
 
 
-class User(database.Base):
+class User(models.database.Base):
     __tablename__ = "users"
 
     id = sqlalchemy.Column(
