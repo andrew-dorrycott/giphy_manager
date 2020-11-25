@@ -28,6 +28,7 @@ class Bookmark(database.Base):
         :returns: Nothing
         :rtype: None
         """
+        super(Bookmark, self).__init__()
         for key, value in kwargs.items():
             setattr(self, key, value)
 

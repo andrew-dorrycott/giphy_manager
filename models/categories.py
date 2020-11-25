@@ -24,6 +24,7 @@ class Category(database.Base):
         :returns: Nothing
         :rtype: None
         """
+        super(Category, self).__init__()
         for key, value in kwargs.items():
             setattr(self, key, value)
 

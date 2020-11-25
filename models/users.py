@@ -1,7 +1,7 @@
+# Standard imports
+import hashlib
+
 # Third party imports
-from cryptography.fernet import Fernet
-from sqlalchemy.ext.hybrid import Comparator
-from sqlalchemy.ext.hybrid import hybrid_property
 import sqlalchemy
 
 # Application imports
@@ -37,6 +37,7 @@ class User(database.Base):
         :returns: Nothing
         :rtype: None
         """
+        super(User, self).__init__()
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -51,28 +52,32 @@ class User(database.Base):
             **self.__dict__
         )
 
-    @hybrid_property
+    @property
     def password(self):
-        cipher = Fernet(config.postgresql["salt"])
-        return cipher.decrypt(self.enc_password)
+        """
+        Returns the encrypted password
 
-    # Not working as intended right now
-    # class encrypt_comparator(Comparator):
-    #     def __init__(self, enc_password):
-    #         self.enc_password = enc_password
-
-    #     def __eq__(self, other):
-    #         cipher = Fernet(config.postgresql["salt"])
-    #         return self.enc_password == cipher.encrypt(str.encode(other))
-
-    # @password.comparator
-    # def password(cls):
-    #     return User.encrypt_comparator(cls.enc_password)
+        :returns: Returns the encrypted password
+        :rtype: byte
+        """
+        return self.enc_password
 
     @password.setter
     def password(self, value):
-        cipher = Fernet(config.postgresql["salt"])
-        self.enc_password = cipher.encrypt(str.encode(value))
+        """
+        Encrypts the password
+
+        :param value: New Password
+        :type value: str
+        :returns: Returns the encrypted password
+        :rtype: byte
+        """
+        self.enc_password = hashlib.pbkdf2_hmac(
+            hash_name="sha256",
+            password=value.encode("utf-8"),
+            salt=config.postgresql["salt"].encode("utf-8"),
+            iterations=100000,
+        )
 
     def to_dict(self):
         """

@@ -27,6 +27,7 @@ class BookmarkXrefCategory(database.Base):
         :returns: Nothing
         :rtype: None
         """
+        super(BookmarkXrefCategory, self).__init__()
         for key, value in kwargs.items():
             setattr(self, key, value)
 
